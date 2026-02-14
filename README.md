@@ -1,26 +1,34 @@
 # MeAdopto API 🐾
 
-A FastAPI-based backend for an animal reporting and adoption platform.
+A FastAPI-based backend for an animal reporting and adoption platform that connects citizens with municipal services for animal welfare and adoption.
 
-## Features
+## What It Does
 
-- Create animal reports (lost/found pets)
-- Store location data (latitude/longitude)
-- Contact information management
-- Report status tracking
+**Citizens can:**
+- Report lost/stray/injured animals
+- Browse animals available for adoption  
+- Book adoption meetings
+
+**Municipal staff can:**
+- Update report status
+- Add found animals to adoption system
 
 ## Tech Stack
 
-- **Backend Framework:** FastAPI
-- **Database:** MySQL 8.4
-- **ORM:** SQLAlchemy
-- **Package Manager:** uv
-- **Python:** 3.13
+- FastAPI + Python 3.13
+- MySQL 8.4
+- SQLAlchemy ORM
+- Pydantic validation
+- uv package manager
 
-## Setup
+## Quick Start
 
-1. Clone the repository
-2. Create `.env` file with database credentials:
+1. **Install dependencies**
+```bash
+uv sync
+```
+
+2. **Create `.env` file**
 ```env
 DB_HOST=127.0.0.1
 DB_PORT=3306
@@ -28,32 +36,40 @@ DB_USER=root
 DB_PASSWORD=
 DB_NAME=meadopto
 ```
-3. Install dependencies: `uv sync`
-4. Create database: `CREATE DATABASE meadopto;`
-5. Run: `uv run uvicorn app.main:app --reload`
-6. Visit API docs: `http://127.0.0.1:8000/docs`
 
-## Project Structure
+3. **Run**
+```bash
+uv run uvicorn app.main:app --reload
 ```
-adopt-me-backend/
-├── app/
-│   ├── main.py          # FastAPI app entry point
-│   ├── database.py      # Database connection
-│   ├── models.py        # SQLAlchemy models
-│   ├── schemas.py       # Pydantic schemas
-│   └── routers/
-│       └── reports.py   # Report endpoints
-└── .env                 # Environment variables
+
+4. **API Docs**
+```
+http://127.0.0.1:8000/docs
 ```
 
 ## API Endpoints
 
-- `POST /reports/` - Create a new report
-- `GET /` - Welcome message
+**Public:**
+- `POST /reports/` - Submit animal report
+- `GET /animals/` - List adoptable animals
+- `POST /meetings/` - Book adoption meeting
+
+**Admin:**
+- `PATCH /admin/reports/{id}` - Update report, auto-create animal if found
+
+## Database
+
+6 tables: Department, Report, Media, Animal, AnimalPhoto, AdoptionMeeting
+
+## Example Flow
+```
+Citizen reports dog → Staff finds dog → Marks "Resolved - Found" 
+→ Animal auto-created → Appears on adoption list 
+→ Citizen books meeting
+```
 
 ## Status
 
-🚧 In active development - Learning project
+Learning project - Active development
 
-## Author
-Sara Mjeshtri
+Built by [Sara Mjeshtri](https://github.com/saramjeshtri)

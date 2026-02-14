@@ -141,3 +141,14 @@ class ReportWithDetails(ReportResponse):
     """Report with media and department info"""
     media: List[MediaResponse] = []
     department: Optional[DepartmentResponse] = None
+
+class ReportStatusUpdate(BaseModel):
+    """Schema for updating report status and creating animal if found"""
+    report_status: str
+    
+    # Optional animal details (required if status is "Resolved - Found")
+    animal_name: Optional[str] = None
+    animal_breed: Optional[str] = None
+    animal_age_estimate: Optional[str] = None
+    animal_gender: Optional[str] = None
+    animal_health_status: Optional[str] = "Healthy"
