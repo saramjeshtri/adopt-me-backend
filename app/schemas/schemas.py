@@ -132,6 +132,9 @@ class AdoptionMeetingResponse(AdoptionMeetingBase):
     class Config:
         from_attributes = True
 
+class MeetingStatusUpdate(BaseModel):
+    """Schema for updating adoption meeting status"""
+    status: str
 
 class AnimalWithPhotos(AnimalResponse):
     """Animal with its photos included"""

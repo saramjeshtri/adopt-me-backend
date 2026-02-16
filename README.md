@@ -55,7 +55,9 @@ http://127.0.0.1:8000/docs
 - `POST /meetings/` - Book adoption meeting
 
 **Admin:**
+- `GET /admin/reports?status=Open` - View reports
 - `PATCH /admin/reports/{id}` - Update report, auto-create animal if found
+- `PATCH /admin/meetings/{id}` - Update meeting status
 
 ## Database
 
@@ -66,6 +68,7 @@ http://127.0.0.1:8000/docs
 Citizen reports dog → Staff finds dog → Marks "Resolved - Found" 
 → Animal auto-created → Appears on adoption list 
 → Citizen books meeting
+→ Staff confirms → Meeting updated
 ```
 
 ## Status

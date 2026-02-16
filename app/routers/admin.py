@@ -1,15 +1,43 @@
 from fastapi import APIRouter, Depends, HTTPException
+from typing import List, Optional
 from sqlalchemy.orm import Session
 from datetime import datetime
 
-from app.models import Animal, Report
-from app.schemas import ReportStatusUpdate, ReportResponse, AnimalResponse
+from app.models import Animal, Report, AdoptionMeeting
+
+from app.schemas import (
+    ReportStatusUpdate, 
+    ReportResponse, 
+    AnimalResponse,
+    AdoptionMeetingResponse, 
+    MeetingStatusUpdate
+)
 from app.database import get_db
 
 router = APIRouter(
     prefix="/admin",
     tags=["Admin"]
 )
+
+@router.get("/reports", response_model=List[ReportResponse])
+def get_all_reports(
+    status: Optional[str] = None, 
+    db: Session = Depends(get_db)
+):
+    """
+    Get all reports with optional status filtering
+    
+    Query parameters:
+    - status: Filter by report status (e.g., "Open", "Resolved - Found")
+    """
+    query = db.query(Report)
+    
+    if status:
+        query = query.filter(Report.report_status == status)
+    
+    reports = query.all()
+    return reports
+
 
 @router.patch("/reports/{report_id}", response_model=ReportResponse)
 def update_report_status(
@@ -90,8 +118,39 @@ def update_report_status(
         db.add(new_animal)
         print(f"✅ Auto-created animal '{new_animal.name}' for report {report_id}")
     
-    # Step 4: Save all changes
     db.commit()
     db.refresh(report)
     
     return report
+
+@router.patch("/meetings/{meeting_id}", response_model=AdoptionMeetingResponse)
+def update_meeting_status(
+    meeting_id: int,
+    status_update: MeetingStatusUpdate,
+    db: Session = Depends(get_db) 
+):
+    """
+    Update adoption meeting status
+    
+    Status options:
+    - Pending (default)
+    - Confirmed (staff approved)
+    - Completed (meeting happened)
+    - Cancelled (meeting cancelled)
+    """
+    # Find the meeting
+    meeting = db.query(AdoptionMeeting).filter(
+        AdoptionMeeting.meeting_id == meeting_id
+    ).first()
+    
+    if not meeting:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+    
+    # Update status
+    meeting.status = status_update.status
+    
+    # Save changes
+    db.commit()
+    db.refresh(meeting)
+    
+    return meeting
