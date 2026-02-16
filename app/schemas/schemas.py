@@ -155,3 +155,10 @@ class ReportStatusUpdate(BaseModel):
     animal_age_estimate: Optional[str] = None
     animal_gender: Optional[str] = None
     animal_health_status: Optional[str] = "Healthy"
+
+class AdoptionStats(BaseModel):
+    total_rescued: int
+    currently_available: int
+    meetings_scheduled: int
+    successfully_adopted: int
+  

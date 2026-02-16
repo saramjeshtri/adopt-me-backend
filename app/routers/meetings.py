@@ -20,17 +20,41 @@ def create_adoption_meeting(
     """
     Book an adoption meeting for an animal
     """
-    animal = db.query(Animal).filter(Animal.animal_id == meeting_data.animal_id).first()
+    # Find the animal
+    animal = db.query(Animal).filter(
+        Animal.animal_id == meeting_data.animal_id
+    ).first()
     
     if not animal:
         raise HTTPException(status_code=404, detail="Animal not found")
     
-    if animal.adoption_status != "Available":
+    # Check if animal already has a pending/confirmed meeting
+    existing_meeting = db.query(AdoptionMeeting).filter(
+        AdoptionMeeting.animal_id == meeting_data.animal_id,
+        AdoptionMeeting.status.in_(["Pending", "Confirmed"])
+    ).first()
+
+    if existing_meeting:
         raise HTTPException(
             status_code=400,
-            detail=f"Animal is not available for adoption (status: {animal.adoption_status})"  
+            detail="This animal already has a scheduled meeting"
+        )
+
+    # Check if animal is already adopted
+    if animal.adoption_status == "Adopted":
+        raise HTTPException(
+            status_code=400,
+            detail="This animal has already been adopted"
         )
     
+    # Check if animal is available for adoption
+    if animal.adoption_status not in ["Available", "Meeting Scheduled"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Animal is not available for adoption (status: {animal.adoption_status})"
+        )
+    
+    # Create the meeting
     new_meeting = AdoptionMeeting(
         visitor_name=meeting_data.visitor_name,
         visitor_phone=meeting_data.visitor_phone,
@@ -42,7 +66,11 @@ def create_adoption_meeting(
         created_at=datetime.now(),
         animal_id=meeting_data.animal_id
     )
-
+    
+    # Update animal status to "Meeting Scheduled"
+    animal.adoption_status = "Meeting Scheduled"
+    
+    # Save everything
     db.add(new_meeting)
     db.commit()
     db.refresh(new_meeting)
