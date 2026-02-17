@@ -43,7 +43,6 @@ class StatusiShendetit(str, Enum):
     shendetshem  = "Shëndetshëm"
     i_lenduar    = "I lënduar"
     ne_trajtim   = "Në trajtim"
-    ne_rikuperim = "Në rikuperim"
 
 # STATUSI I TAKIMIT (Meeting Status)
 class StatusiTakimit(str, Enum):

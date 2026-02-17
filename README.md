@@ -43,6 +43,8 @@ GET    /admin/animals/{id}                   Full animal detail
 PATCH  /admin/animals/{id}                   Update animal → auto-maps health → adoption status
 GET    /admin/meetings                       All meetings with status filter
 PATCH  /admin/meetings/{id}                  Confirm / complete / cancel meeting
+POST /admin/animals/{animal_id}
+allows admins to upload photos/ Validates animal exists before creating photo/Returns 404 if animal not found"
 ```
 
 ## How It Works

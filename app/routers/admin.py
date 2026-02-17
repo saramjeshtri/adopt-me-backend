@@ -3,7 +3,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 from datetime import datetime
 
-from app.models import Animal, Report, AdoptionMeeting
+from app.models import Animal, Report, AnimalPhoto
 from app.schemas import (
     ReportStatusUpdate,
     ReportResponse,
@@ -13,6 +13,8 @@ from app.schemas import (
     AnimalUpdate,
     AdoptionMeetingResponse,
     MeetingStatusUpdate,
+    AnimalPhotoResponse,
+    AnimalPhotoCreate,
 )
 from app.enums import (
     StatusiRaportit,
@@ -29,6 +31,31 @@ router = APIRouter(
     prefix="/admin",
     tags=["Admin"]
 )
+
+@router.post("/animals/{animal_id}", response_model = AnimalPhotoResponse)
+def upload_animal_photos(
+    animal_id: int,
+    photo_data: AnimalPhotoCreate,
+    db: Session = Depends(get_db),
+):
+    animal = db.query(Animal).filter(Animal.animal_id == animal_id).first()
+    if not animal:
+        raise HTTPException(status_code=404, detail="Kafsha nuk u gjet")
+
+    existing_photos_count = db.query(AnimalPhoto).filter(AnimalPhoto.animal_id == animal_id).count()
+
+    is_primary = existing_photos_count == 0
+
+    new_photo = AnimalPhoto(
+        photo_url = photo_data.photo_url,
+        is_primary = is_primary,
+        animal_id = animal_id
+    )
+    
+    db.add(new_photo)
+    db.commit()
+    db.refresh(new_photo)
+    return new_photo
 
 # REPORT MANAGEMENT 
 @router.get("/reports", response_model=List[ReportResponse])
