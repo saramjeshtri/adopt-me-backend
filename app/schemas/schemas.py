@@ -1,164 +1,208 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime, date, time
 
+from app.enums import (
+    LlojiRaportit,
+    StatusiRaportit,
+    LlojiKafshes,
+    GjiniaKafshes,
+    StatusiAdoptimit,
+    StatusiShendetit,
+    StatusiTakimit,
+    LlojiMedias,
+)
+
+
+# DEPARTMENT 
 class DepartmentBase(BaseModel):
-    """Base schema for Department - shared fields"""
     department_name: str
     department_type: str
-    contact_email: Optional[str] = None
-    contact_phone: Optional[str] = None
+    contact_email:  Optional[str] = None
+    contact_phone:  Optional[str] = None
 
 class DepartmentCreate(DepartmentBase):
-    """Schema for creating a new Department"""
-    pass  # Inherits everything from DepartmentBase
+    pass
 
 class DepartmentResponse(DepartmentBase):
-    """Schema for returning Department data to frontend"""
     department_id: int
-    
+
     class Config:
         from_attributes = True
 
+
+# REPORT 
 
 class ReportBase(BaseModel):
-    """Base schema for Report"""
-    report_type: str
-    report_description:str
-    location_address: str
-    latitude: float =  Field(..., ge=-90, le=90) 
+    report_type:        LlojiRaportit
+    report_description: str
+    location_address:   str
+    latitude:  float = Field(..., ge=-90,  le=90)
     longitude: float = Field(..., ge=-180, le=180)
     phoneNr: Optional[str] = None
-    email: Optional[str] = None
+    email:   Optional[str] = None
 
 class ReportCreate(ReportBase):
-    """Schema for creating a new Report"""
-    department_id:int
+    """
+    Used by the citizen submission form.
+    department_id is NOT here — routing is automatic via ROUTING_DEPARTAMENTIT.
+    """
+    pass
 
 class ReportResponse(ReportBase):
-    """Schema for returning Report data"""
-    report_id: int
-    report_status:str
-    created_at: datetime
-    resolved_at: Optional[datetime] = None
+    report_id:     int
+    report_status: StatusiRaportit
+    created_at:    datetime
+    resolved_at:   Optional[datetime] = None
     department_id: int
 
     class Config:
         from_attributes = True
 
 
+# MEDIA
+
 class MediaBase(BaseModel):
-    """Base schema for Media"""
-    media_type: str
-    file_url: str
+    media_type: LlojiMedias
+    file_url:   str
 
 class MediaCreate(MediaBase):
-    """Schema for creating Media"""
     report_id: int
 
 class MediaResponse(MediaBase):
-    """Schema for returning Media data"""
-    media_id: int
+    media_id:    int
     uploaded_at: datetime
-    report_id: int
-    
+    report_id:   int
+
     class Config:
         from_attributes = True
 
 
+# ANIMAL
+
 class AnimalBase(BaseModel):
-    """Base schema for Animal"""
-    name: Optional[str] = None
-    species: str
-    breed: Optional[str] = None
-    age_estimate: Optional[str] = None
-    gender: Optional[str] = None
-    description: Optional[str] = None
-    health_status: Optional[str] = None
+    name:          Optional[str] = None
+    species:       LlojiKafshes
+    breed:         Optional[str] = None
+    age_estimate:  Optional[str] = None
+    gender:        Optional[GjiniaKafshes] = None
+    description:   Optional[str] = None
+    health_status: Optional[StatusiShendetit] = None
 
 class AnimalCreate(AnimalBase):
-    """Schema for creating Animal"""
     report_id: int
 
 class AnimalResponse(AnimalBase):
-    """Schema for returning Animal data"""
-    animal_id: int
-    adoption_status: str
-    added_at: datetime
-    report_id: int
-    
+    animal_id:       int
+    adoption_status: StatusiAdoptimit
+    added_at:        datetime
+    adopted_at:      Optional[datetime] = None
+    report_id:       int
+
     class Config:
         from_attributes = True
 
 
+# ANIMAL PHOTO
+
 class AnimalPhotoBase(BaseModel):
-    """Base schema for AnimalPhoto"""
-    photo_url: str
+    photo_url:  str
     is_primary: bool = False
 
 class AnimalPhotoCreate(AnimalPhotoBase):
-    """Schema for creating AnimalPhoto"""
     animal_id: int
 
 class AnimalPhotoResponse(AnimalPhotoBase):
-    """Schema for returning AnimalPhoto data"""
-    photo_id: int
+    photo_id:  int
     animal_id: int
-    
+
     class Config:
         from_attributes = True
 
 
+# ADOPTION MEETING
+
 class AdoptionMeetingBase(BaseModel):
-    """Base schema for AdoptionMeeting"""
-    visitor_name: str
-    visitor_phone: str
-    visitor_email: Optional[str] = None
+    visitor_name:   str
+    visitor_phone:  str
+    visitor_email:  Optional[str] = None
     preferred_date: date
     preferred_time: time
-    notes: Optional[str] = None
+    notes:          Optional[str] = None
 
 class AdoptionMeetingCreate(AdoptionMeetingBase):
-    """Schema for creating AdoptionMeeting"""
     animal_id: int
 
 class AdoptionMeetingResponse(AdoptionMeetingBase):
-    """Schema for returning AdoptionMeeting data"""
     meeting_id: int
-    status: str
+    status:     StatusiTakimit
     created_at: datetime
-    animal_id: int
-    
+    animal_id:  int
+
     class Config:
         from_attributes = True
 
+
+# ADMIN UPDATE SCHEMAS
+class ReportStatusUpdate(BaseModel):
+    """
+    Used by admin to update a report's status.
+    If report_status == zgjidhur_gjetur, animal fields become required.
+    """
+    report_status: StatusiRaportit
+
+    animal_name:          Optional[str]              = None
+    animal_species:       Optional[LlojiKafshes]     = None
+    animal_breed:         Optional[str]              = None
+    animal_age_estimate:  Optional[str]              = None
+    animal_gender:        Optional[GjiniaKafshes]    = GjiniaKafshes.e_panjohur
+    animal_health_status: Optional[StatusiShendetit] = StatusiShendetit.shendetshem
+
+
 class MeetingStatusUpdate(BaseModel):
-    """Schema for updating adoption meeting status"""
-    status: str
+    """Used by admin to confirm, complete, or cancel a meeting."""
+    status: StatusiTakimit
+
+
+class AnimalUpdate(BaseModel):
+    """
+    Used by admin to update an animal's details.
+
+    Automatic rules applied by the backend:
+    - health "Shëndetshëm" or "Në rikuperim" → adoption = "Disponueshme"
+    - health "I lënduar"   or "Në trajtim"   → adoption = "Jo disponueshme"
+    - adoption "Adoptuar" → adopted_at set automatically
+    - adoption "Disponueshme" → adopted_at cleared
+
+    BUG FIX #5: Added `species` field — was missing from original, meaning
+    an admin could never correct a wrongly-categorised animal species.
+    """
+    name:            Optional[str]              = None
+    species:         Optional[LlojiKafshes]     = None
+    breed:           Optional[str]              = None
+    age_estimate:    Optional[str]              = None
+    gender:          Optional[GjiniaKafshes]    = None
+    description:     Optional[str]              = None
+    health_status:   Optional[StatusiShendetit] = None
+    adoption_status: Optional[StatusiAdoptimit] = None
+
+
+# COMPOSITE RESPONSE SCHEMAS 
 
 class AnimalWithPhotos(AnimalResponse):
-    """Animal with its photos included"""
+    """Animal data including its adoption photos."""
     photos: List[AnimalPhotoResponse] = []
 
+
 class ReportWithDetails(ReportResponse):
-    """Report with media and department info"""
-    media: List[MediaResponse] = []
+    """Full report including attached media and department info."""
+    media:      List[MediaResponse]          = []
     department: Optional[DepartmentResponse] = None
 
-class ReportStatusUpdate(BaseModel):
-    """Schema for updating report status and creating animal if found"""
-    report_status: str
-    
-    # Optional animal details (required if status is "Resolved - Found")
-    animal_name: Optional[str] = None
-    animal_breed: Optional[str] = None
-    animal_age_estimate: Optional[str] = None
-    animal_gender: Optional[str] = None
-    animal_health_status: Optional[str] = "Healthy"
 
+# STATISTICS 
 class AdoptionStats(BaseModel):
-    total_rescued: int
-    currently_available: int
-    meetings_scheduled: int
+    total_rescued:        int
+    currently_available:  int
+    meetings_scheduled:   int
     successfully_adopted: int
-  

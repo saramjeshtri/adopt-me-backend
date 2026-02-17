@@ -7,7 +7,8 @@ from app.schemas.schemas import (
     AnimalPhotoCreate, AnimalPhotoResponse,
     AdoptionMeetingCreate, AdoptionMeetingResponse,
     ReportWithDetails,
-    MeetingStatusUpdate
+    MeetingStatusUpdate,
+    AdoptionStats,AnimalUpdate
 )
 
 __all__ = [
@@ -19,5 +20,7 @@ __all__ = [
     "AnimalPhotoCreate", "AnimalPhotoResponse",
     "AdoptionMeetingCreate", "AdoptionMeetingResponse",
     "ReportWithDetails",
-    "MeetingStatusUpdate"
+    "MeetingStatusUpdate",
+    "AdoptionStats",
+    "AnimalUpdate"
 ]

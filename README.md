@@ -1,88 +1,84 @@
 # MeAdopto API 🐾
+Animal incident reporting and adoption platform for the Municipality of Tirana.
 
-Animal reporting and adoption platform backend.
-
-## Features
-
-**Citizens:** Report animals → Browse adoptable pets → Book adoption meetings  
-**Staff:** Manage reports → Auto-create animals → Confirm meetings → Track statistics
-
-## Tech Stack
-
-FastAPI • MySQL 8.4 • SQLAlchemy • Python 3.13 • uv
+## Stack
+FastAPI • MySQL 8.4 • SQLAlchemy • Pydantic v2 • Python 3.13 • uv
 
 ## Quick Start
 ```bash
-# Install
 uv sync
+uv run uvicorn app.main:app --reload
+# Docs → http://127.0.0.1:8000/docs
+```
 
-# Configure .env
+## .env
+```
 DB_HOST=127.0.0.1
 DB_PORT=3306
 DB_USER=root
 DB_PASSWORD=
 DB_NAME=meadopto
-
-# Run
-uv run uvicorn app.main:app --reload
-
-# Docs
-http://127.0.0.1:8000/docs
 ```
 
-## API Endpoints
+## Endpoints
 
-**Public:**
-- `POST /reports/` - Submit animal report
-- `GET /animals/` - List available animals (excludes adopted)
-- `GET /animals/statistics` - Get adoption success statistics
-- `POST /meetings/` - Book adoption meeting
-
-**Admin:**
-- `GET /admin/reports?status=Open` - View/filter reports
-- `PATCH /admin/reports/{id}` - Update status, auto-create animal
-- `PATCH /admin/meetings/{id}` - Confirm/cancel meetings
-
-## Features
-
-**Smart Status Management:**
-- Animals marked "Meeting Scheduled" when booked
-- Adopted animals hidden from public listings
-- Prevents double-booking same animal
-- Auto-updates status through workflow
-
-**Success Tracking:**
-- View total animals rescued
-- Track adoption success rate
-- Monitor active meetings
-- Statistics endpoint for impact dashboard
-
-## Workflow
+**Public**
 ```
-Report → Found → Auto-create animal → List for adoption 
-→ Book meeting → Status updates → Adoption complete 🎉
+POST   /reports/              Submit incident report (auto-routed to department)
+GET    /reports/{id}          Track report status + media + department
+GET    /animals/              List animals available / meeting scheduled
+GET    /animals/{id}          Animal detail with all adoption photos
+GET    /animals/statistika    Adoption statistics for homepage
+POST   /meetings/             Book adoption meeting (blocks double-booking)
+GET    /meetings/{id}         Meeting details for citizen
 ```
+
+**Admin**
+```
+GET    /admin/reports                        View & filter all reports (status, department, type)
+GET    /admin/reports/{id}                   Full report detail
+PATCH  /admin/reports/{id}                   Update status → auto-creates animal if found
+GET    /admin/animals                        All animals with adoption status filter
+GET    /admin/animals/{id}                   Full animal detail
+PATCH  /admin/animals/{id}                   Update animal → auto-maps health → adoption status
+GET    /admin/meetings                       All meetings with status filter
+PATCH  /admin/meetings/{id}                  Confirm / complete / cancel meeting
+```
+
+## How It Works
+```
+Citizen reports → Auto-routed to correct department
+→ Admin resolves → Animal registered for adoption
+→ Citizen books meeting → Admin confirms → Adopted 
+```
+
+## Department Routing
+| Report Type | Department |
+|-------------|------------|
+| Abuzim me kafshë | Shërbimi Veterinar |
+| Kafshë e lënduar | Shërbimi Veterinar |
+| Kafshë agresive | Policia Bashkiake |
+| Kafshë e humbur | Policia Bashkiake |
+| Braktisje kafshësh | Sektori i Mjedisit |
+| Tjetër | Shërbimi Veterinar (fallback) |
+
+## Health → Adoption Status Mapping
+| Health Status | Adoption Status |
+|---------------|-----------------|
+| Shëndetshëm | ✅ Disponueshme |
+| Në trajtim | ❌ Jo disponueshme |
+| I lënduar | ❌ Jo disponueshme |
 
 ## Database
-
-6 tables: Department, Report, Media, Animal, AnimalPhoto, AdoptionMeeting
+6 tables: `Department` · `Report` · `Media` · `Animal` · `AnimalPhoto` · `AdoptionMeeting`
 
 ## Project Structure
 ```
 app/
-├── main.py
-├── database.py
-├── models/           # SQLAlchemy models
-├── schemas/          # Pydantic validation
-└── routers/          # API endpoints
-    ├── reports.py
-    ├── animals.py
-    ├── meetings.py
-    └── admin.py
+├── enums.py         # All controlled values in Albanian
+├── models/          # SQLAlchemy models
+├── schemas/         # Pydantic validation
+└── routers/         # reports, animals, meetings, admin
 ```
 
-## Status
-
-Learning project - Active development
-
-Built by [Sara Mjeshtri](https://github.com/saramjeshtri)
+Built by [Sara Mjeshtri](https://github.com/saramjeshtri) — Active development
