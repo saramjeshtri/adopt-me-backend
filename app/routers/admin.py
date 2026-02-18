@@ -3,7 +3,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 from datetime import datetime
 
-from app.models import Animal, Report, AnimalPhoto
+from app.models import Animal, Report, AnimalPhoto,AdoptionMeeting
 from app.schemas import (
     ReportStatusUpdate,
     ReportResponse,
@@ -51,11 +51,36 @@ def upload_animal_photos(
         is_primary = is_primary,
         animal_id = animal_id
     )
-    
+
     db.add(new_photo)
     db.commit()
     db.refresh(new_photo)
     return new_photo
+
+@router.delete("/animals/{animal_id}/photos/{photo_id}")
+def delete_animal_photo(
+    animal_id: int,
+    photo_id: int,
+    db: Session = Depends(get_db),
+):
+    photo = db.query(AnimalPhoto).filter(
+        AnimalPhoto.animal_id == animal_id,
+        AnimalPhoto.photo_id == photo_id
+    ).first()
+    if not photo:
+        raise HTTPException(status_code=404, detail="Fotoja nuk u gjet")
+    
+    was_primary = photo.is_primary
+    db.delete(photo)
+    db.commit()
+
+    if(was_primary):
+        another_photo=db.query(AnimalPhoto).filter(AnimalPhoto.animal_id == animal_id).first()
+        if another_photo:
+            another_photo.is_primary = True
+            db.commit()
+
+    return {"message": "Fotoja u fshi me sukses"}
 
 # REPORT MANAGEMENT 
 @router.get("/reports", response_model=List[ReportResponse])

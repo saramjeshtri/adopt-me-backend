@@ -36,15 +36,28 @@ GET    /meetings/{id}         Meeting details for citizen
 **Admin**
 ```
 GET    /admin/reports                        View & filter all reports (status, department, type)
+
 GET    /admin/reports/{id}                   Full report detail
+
 PATCH  /admin/reports/{id}                   Update status → auto-creates animal if found
+
 GET    /admin/animals                        All animals with adoption status filter
+
 GET    /admin/animals/{id}                   Full animal detail
+
 PATCH  /admin/animals/{id}                   Update animal → auto-maps health → adoption status
+
 GET    /admin/meetings                       All meetings with status filter
+
 PATCH  /admin/meetings/{id}                  Confirm / complete / cancel meeting
+
 POST /admin/animals/{animal_id}
 allows admins to upload photos/ Validates animal exists before creating photo/Returns 404 if animal not found"
+
+DELETE /admin/animals/{animal_id}/photos/{photo_id}
+Validates photo exists and belongs to animal
+Automatically promotes another photo to primary if deleting primary
+Handles edge case of deleting last remaining photo"
 ```
 
 ## How It Works
