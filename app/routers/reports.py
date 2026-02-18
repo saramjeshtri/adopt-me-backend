@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.models import Report, Department
-from app.schemas import ReportCreate, ReportResponse, ReportWithDetails
+from app.models import Report, Department, Media
+from app.schemas import ReportCreate, ReportResponse, ReportWithDetails,MediaResponse, MediaCreate
 from app.enums import StatusiRaportit, ROUTING_DEPARTAMENTIT
 from app.database import get_db
 
@@ -88,3 +88,25 @@ def get_report(
     if not report:
         raise HTTPException(status_code=404, detail="Raporti nuk u gjet")
     return report
+
+@router.post("/{report_id}/media", response_model = MediaResponse)
+def upload_report_photo(
+    report_id: int,
+    media_data: MediaCreate,
+    db: Session = Depends(get_db)
+):
+    report = db.query(Report).filter(Report.report_id==report_id).first()
+
+    if not report:
+        raise HTTPException(status_code=404, detail="Raporti nuk u gjet")
+    
+    new_media = Media(
+        media_type = media_data.media_type,
+        file_url = media_data.file_url,
+        report_id=report_id
+    )
+
+    db.add(new_media)
+    db.commit()
+    db.refresh(new_media)
+    return new_media
