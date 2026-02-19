@@ -26,15 +26,16 @@ from app.enums import (
     StatusiShendetit,
 )
 from app.database import get_db
+from app.auth import verify_admin
 
 router = APIRouter(
     prefix="/admin",
-    tags=["Admin"]
+    tags=["Admin"],
+    dependencies=[Depends(verify_admin)]
 )
 
 
 # PHOTO MANAGEMENT
-
 @router.post("/animals/{animal_id}/photos", response_model=AnimalPhotoResponse)
 async def upload_animal_photos(
     animal_id: int,
