@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from datetime import datetime
 
-from app.models import Animal, Report, AnimalPhoto,AdoptionMeeting
+from app.models import Animal, Report, AnimalPhoto, AdoptionMeeting
 from app.schemas import (
     ReportStatusUpdate,
     ReportResponse,
@@ -14,8 +14,8 @@ from app.schemas import (
     AdoptionMeetingResponse,
     MeetingStatusUpdate,
     AnimalPhotoResponse,
-    AnimalPhotoCreate,
 )
+from app.cloudinary_config import upload_image
 from app.enums import (
     StatusiRaportit,
     StatusiAdoptimit,
@@ -23,7 +23,7 @@ from app.enums import (
     GjiniaKafshes,
     LlojiRaportit,
     HEALTH_NE_ADOPTIM,
-    StatusiShendetit
+    StatusiShendetit,
 )
 from app.database import get_db
 
@@ -32,30 +32,56 @@ router = APIRouter(
     tags=["Admin"]
 )
 
-@router.post("/animals/{animal_id}", response_model = AnimalPhotoResponse)
-def upload_animal_photos(
+
+# PHOTO MANAGEMENT
+
+@router.post("/animals/{animal_id}/photos", response_model=AnimalPhotoResponse)
+async def upload_animal_photos(
     animal_id: int,
-    photo_data: AnimalPhotoCreate,
+    file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
+    """
+    Uploads a real image file for an animal to Cloudinary,
+    then saves the returned URL in the database.
+    The first photo uploaded automatically becomes the primary photo.
+    """
     animal = db.query(Animal).filter(Animal.animal_id == animal_id).first()
     if not animal:
         raise HTTPException(status_code=404, detail="Kafsha nuk u gjet")
 
-    existing_photos_count = db.query(AnimalPhoto).filter(AnimalPhoto.animal_id == animal_id).count()
+    # Validate file type
+    if file.content_type not in ["image/jpeg", "image/png", "image/webp"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Vetëm skedarët JPEG, PNG dhe WebP pranohen",
+        )
 
-    is_primary = existing_photos_count == 0
+    # Upload to Cloudinary
+    file_bytes = await file.read()
+    try:
+        photo_url = upload_image(file_bytes, folder="animals")
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Ngarkimi i fotos dështoi. Provoni përsëri.",
+        )
+
+    existing_photos_count = db.query(AnimalPhoto).filter(
+        AnimalPhoto.animal_id == animal_id
+    ).count()
 
     new_photo = AnimalPhoto(
-        photo_url = photo_data.photo_url,
-        is_primary = is_primary,
-        animal_id = animal_id
+        photo_url=photo_url,
+        is_primary=existing_photos_count == 0,  # first photo = primary
+        animal_id=animal_id,
     )
 
     db.add(new_photo)
     db.commit()
     db.refresh(new_photo)
     return new_photo
+
 
 @router.delete("/animals/{animal_id}/photos/{photo_id}")
 def delete_animal_photo(
@@ -69,20 +95,24 @@ def delete_animal_photo(
     ).first()
     if not photo:
         raise HTTPException(status_code=404, detail="Fotoja nuk u gjet")
-    
+
     was_primary = photo.is_primary
     db.delete(photo)
     db.commit()
 
-    if(was_primary):
-        another_photo=db.query(AnimalPhoto).filter(AnimalPhoto.animal_id == animal_id).first()
+    if was_primary:
+        another_photo = db.query(AnimalPhoto).filter(
+            AnimalPhoto.animal_id == animal_id
+        ).first()
         if another_photo:
             another_photo.is_primary = True
             db.commit()
 
     return {"message": "Fotoja u fshi me sukses"}
 
-# REPORT MANAGEMENT 
+
+# REPORT MANAGEMENT
+
 @router.get("/reports", response_model=List[ReportResponse])
 def get_all_reports(
     status:        Optional[str] = None,
@@ -90,13 +120,6 @@ def get_all_reports(
     report_type:   Optional[LlojiRaportit] = None,
     db: Session = Depends(get_db),
 ):
-    """
-    Merr të gjitha raportet me filtrim opsional.
-    Query parameters:
-    - status:        p.sh. "Hapur", "Në proces"
-    - department_id: filtro sipas departamentit (p.sh. vetëm Policia Bashkiake)
-    - report_type:   filtro sipas llojit të rastit
-    """
     query = db.query(Report)
     if status:
         query = query.filter(Report.report_status == status)
@@ -106,14 +129,12 @@ def get_all_reports(
         query = query.filter(Report.report_type == report_type)
     return query.all()
 
+
 @router.get("/reports/{report_id}", response_model=ReportWithDetails)
 def get_report_detail(
     report_id: int,
     db: Session = Depends(get_db),
 ):
-    """
-    Kthen detajet e plotë të një raporti, duke përfshirë median dhe departamentin.
-    """
     report = db.query(Report).filter(Report.report_id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Raporti nuk u gjet")
@@ -126,22 +147,15 @@ def update_report_status(
     status_update: ReportStatusUpdate,
     db: Session = Depends(get_db),
 ):
-    """
-    Përditëson statusin e një raporti.
-    Nëse statusi është 'Zgjidhur - Kafshë e gjetur', krijohet automatikisht
-    një kafshë e re në sistemin e adoptimit.
-    """
     report = db.query(Report).filter(Report.report_id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Raporti nuk u gjet")
 
     report.report_status = status_update.report_status
 
-    # Set resolved_at for any "Zgjidhur" status
     if "Zgjidhur" in status_update.report_status.value:
         report.resolved_at = datetime.now()
 
-    # Auto-create animal only when the specific "found" status is set
     if status_update.report_status == StatusiRaportit.zgjidhur_gjetur:
 
         if not status_update.animal_name:
@@ -160,7 +174,6 @@ def update_report_status(
                 detail="Statusi i shëndetit është i detyrueshëm kur statusi është 'Zgjidhur - Kafshë e gjetur'",
             )
 
-        # Prevent creating a second animal for the same report
         existing_animal = db.query(Animal).filter(
             Animal.report_id == report_id
         ).first()
@@ -184,7 +197,6 @@ def update_report_status(
             adoption_status = initial_adoption_status,
             adopted_at      = None,
             report_id       = report_id,
-            # added_at set automatically by model default
         )
         db.add(new_animal)
 
@@ -193,17 +205,13 @@ def update_report_status(
     return report
 
 
-# ANIMAL MANAGEMENT 
+# ANIMAL MANAGEMENT
 
 @router.get("/animals", response_model=List[AnimalResponse])
 def get_all_animals(
     adoption_status: Optional[StatusiAdoptimit] = None,
     db: Session = Depends(get_db),
 ):
-    """
-    Merr të gjitha kafshët (admin view).
-    Filtrim opsional sipas statusit të adoptimit.
-    """
     query = db.query(Animal)
     if adoption_status:
         query = query.filter(Animal.adoption_status == adoption_status)
@@ -215,9 +223,6 @@ def get_animal_detail(
     animal_id: int,
     db: Session = Depends(get_db),
 ):
-    """
-    Kthen detajet e plotë të një kafshe me të gjitha fotot (admin view).
-    """
     animal = db.query(Animal).filter(Animal.animal_id == animal_id).first()
     if not animal:
         raise HTTPException(status_code=404, detail="Kafsha nuk u gjet")
@@ -230,16 +235,6 @@ def update_animal(
     animal_update: AnimalUpdate,
     db: Session = Depends(get_db),
 ):
-    """
-    Përditëson detajet e një kafshe.
-
-    Rregulla automatike:
-    - health "Shëndetshëm" / "Në rikuperim" → adoption = "Disponueshme"
-    - health "I lënduar"   / "Në trajtim"   → adoption = "Jo disponueshme"
-    - Nëse kafsha ka takim aktiv ose është adoptuar, health nuk ndryshon adoption_status
-    - adoption "Adoptuar" → adopted_at vendoset automatikisht
-    - adoption "Disponueshme" → adopted_at fshihet
-    """
     animal = db.query(Animal).filter(Animal.animal_id == animal_id).first()
     if not animal:
         raise HTTPException(status_code=404, detail="Kafsha nuk u gjet")
@@ -257,21 +252,18 @@ def update_animal(
     if animal_update.description is not None:
         animal.description = animal_update.description
 
-    # Health change → auto-update adoption_status (unless staff also overrides it)
     if animal_update.health_status is not None:
         animal.health_status = animal_update.health_status
 
         if animal_update.adoption_status is None:
             auto_adoption = HEALTH_NE_ADOPTIM.get(animal_update.health_status)
             if auto_adoption:
-                # Don't override an in-progress meeting or a completed adoption
                 if animal.adoption_status not in [
                     StatusiAdoptimit.takim_planifikuar,
                     StatusiAdoptimit.adoptuar,
                 ]:
                     animal.adoption_status = auto_adoption
 
-    # Manual adoption_status override — always wins over the auto rule above
     if animal_update.adoption_status is not None:
         animal.adoption_status = animal_update.adoption_status
 
@@ -292,11 +284,6 @@ def get_all_meetings(
     status: Optional[StatusiTakimit] = None,
     db: Session = Depends(get_db),
 ):
-    """
-    Merr të gjitha takimet e adoptimit (admin view).
-    Filtrim opsional sipas statusit: "Në pritje", "Konfirmuar", etj.
-
-    """
     query = db.query(AdoptionMeeting)
     if status:
         query = query.filter(AdoptionMeeting.status == status)
@@ -309,14 +296,6 @@ def update_meeting_status(
     status_update: MeetingStatusUpdate,
     db: Session = Depends(get_db),
 ):
-    """
-    Përditëson statusin e një takimi adoptimi.
-
-    - Konfirmuar  → stafi konfirmon takimin
-    - Përfunduar  → takimi u bë; stafi vendos pastaj për adoptimin
-                    duke përdorur PATCH /admin/animals/{id}
-    - Anulluar    → kafsha kthehet automatikisht si e disponueshme vetem nese eshte e shendetshme
-    """
     meeting = db.query(AdoptionMeeting).filter(
         AdoptionMeeting.meeting_id == meeting_id
     ).first()
@@ -325,7 +304,6 @@ def update_meeting_status(
 
     meeting.status = status_update.status
 
-    # Cancellation → automatically revert animal to available
     if status_update.status == StatusiTakimit.anulluar:
         animal = db.query(Animal).filter(
             Animal.animal_id == meeting.animal_id

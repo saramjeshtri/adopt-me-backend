@@ -2,7 +2,7 @@
 Animal incident reporting and adoption platform for the Municipality of Tirana.
 
 ## Stack
-FastAPI • MySQL 8.4 • SQLAlchemy • Pydantic v2 • Python 3.13 • uv
+FastAPI • MySQL 8.4 • SQLAlchemy • Pydantic v2 • Python 3.13 • uv • Cloudinary
 
 ## Quick Start
 ```bash
@@ -18,6 +18,10 @@ DB_PORT=3306
 DB_USER=root
 DB_PASSWORD=
 DB_NAME=meadopto
+
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
 ```
 
 ## Endpoints
@@ -42,7 +46,7 @@ PATCH  /admin/reports/{id}                         Update status → auto-create
 GET    /admin/animals                              All animals with adoption status filter
 GET    /admin/animals/{id}                         Full animal detail
 PATCH  /admin/animals/{id}                         Update animal → auto-maps health → adoption status
-POST   /admin/animals/{id}/photos                  Upload adoption photos → first photo auto-primary
+POST   /admin/animals/{id}/photos                  Upload real image file → stored in Cloudinary → first photo auto-primary
 DELETE /admin/animals/{id}/photos/{photo_id}       Delete photo → auto-promotes another if deleting primary
 GET    /admin/meetings                             All meetings with status filter
 PATCH  /admin/meetings/{id}                        Confirm / complete / cancel meeting → auto-reverts animal status
@@ -76,6 +80,7 @@ Citizen reports → Auto-routed to correct department
 - **Auto-routing**: Reports automatically assigned to correct department
 - **Auto-animal creation**: Resolving report as "found" creates animal record
 - **Health-adoption mapping**: Changing animal health auto-updates adoption status
+- **Cloud photo storage**: Real image uploads via Cloudinary (JPEG, PNG, WebP)
 - **Primary photo management**: First uploaded photo is primary; deleting primary auto-promotes another
 - **Double-booking prevention**: Cannot book meeting if animal has active meeting
 - **Smart cancellation**: Cancelling meeting reverts animal to correct status based on health
@@ -87,18 +92,19 @@ Citizen reports → Auto-routed to correct department
 ## Project Structure
 ```
 app/
-├── database.py      # MySQL connection & session management
-├── enums.py         # All controlled values in Albanian + routing maps
-├── main.py          # FastAPI app + CORS + router registration
+├── database.py          # MySQL connection & session management
+├── enums.py             # All controlled values in Albanian + routing maps
+├── main.py              # FastAPI app + CORS + router registration
+├── cloudinary_config.py # Cloudinary setup & image upload utility
 ├── models/
-│   └── models.py    # SQLAlchemy ORM models with relationships
+│   └── models.py        # SQLAlchemy ORM models with relationships
 ├── schemas/
-│   └── schemas.py   # Pydantic validation schemas (Create/Response/Update)
+│   └── schemas.py       # Pydantic validation schemas (Create/Response/Update)
 └── routers/
-    ├── reports.py   # Citizen report submission + tracking
-    ├── animals.py   # Public animal listing + statistics
-    ├── meetings.py  # Adoption meeting booking
-    └── admin.py     # Staff management endpoints
+    ├── reports.py       # Citizen report submission + tracking
+    ├── animals.py       # Public animal listing + statistics
+    ├── meetings.py      # Adoption meeting booking
+    └── admin.py         # Staff management endpoints
 ```
 
 ## Development Status
@@ -106,9 +112,10 @@ app/
 ✅ All business logic implemented  
 ✅ Input validation & error handling  
 ✅ Relationship management (photos, media, meetings)  
-⏳ File upload (cloud storage integration)  
+✅ Cloud photo storage (Cloudinary)  
+⏳ Admin authentication  
 ⏳ Email notifications  
-⏳ Frontend (React/Vue)  
+⏳ Frontend (React + Vite + Tailwind)  
 ⏳ Deployment  
 
 Built by [Sara Mjeshtri](https://github.com/saramjeshtri) — Active development
