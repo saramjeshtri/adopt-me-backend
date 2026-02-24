@@ -157,6 +157,7 @@ class ReportStatusUpdate(BaseModel):
     animal_age_estimate:  Optional[str]              = None
     animal_gender:        Optional[GjiniaKafshes]    = GjiniaKafshes.e_panjohur
     animal_health_status: Optional[StatusiShendetit] = StatusiShendetit.shendetshem
+    animal_count:         Optional[int]              = 1 
 
 
 class MeetingStatusUpdate(BaseModel):

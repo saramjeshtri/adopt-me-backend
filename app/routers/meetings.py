@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-
+from sqlalchemy import func
 from app.models import AdoptionMeeting, Animal
 from app.schemas import AdoptionMeetingCreate, AdoptionMeetingResponse
 from app.enums import StatusiTakimit, StatusiAdoptimit
@@ -11,6 +11,8 @@ router = APIRouter(
     tags=["Takimet"]
 )
 
+MAX_MEETINGS_PER_ANIMAL = 5
+
 
 @router.post("/", response_model=AdoptionMeetingResponse, status_code=201)
 def create_adoption_meeting(
@@ -19,77 +21,93 @@ def create_adoption_meeting(
 ):
     """
     Rezervon një takim adoptimi për një kafshë.
-    Kafsha duhet të jetë "Disponueshme" ose "Takim i planifikuar".
-    Nëse kafsha ka tashmë një takim aktiv, kërkesa refuzohet.
-
+    Maksimumi 5 takime aktive lejohen për çdo kafshë.
     """
-    animal = db.query(Animal).filter(
-        Animal.animal_id == meeting_data.animal_id
-    ).first()
-    if not animal:
-        raise HTTPException(status_code=404, detail="Kafsha nuk u gjet")
 
-    if animal.adoption_status == StatusiAdoptimit.adoptuar:
-        raise HTTPException(
-            status_code=400,
-            detail="Kjo kafshë është adoptuar tashmë",
+    try:
+        # 🔒 Lock the animal row to prevent race conditions
+        animal = (
+            db.query(Animal)
+            .filter(Animal.animal_id == meeting_data.animal_id)
+            .with_for_update()
+            .first()
         )
 
-    if animal.adoption_status not in [
-        StatusiAdoptimit.disponueshme,
-        StatusiAdoptimit.takim_planifikuar,
-    ]:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Kafsha nuk është e disponueshme për adoptim (statusi: {animal.adoption_status})",
+        if not animal:
+            raise HTTPException(status_code=404, detail="Kafsha nuk u gjet")
+
+        if animal.adoption_status == StatusiAdoptimit.adoptuar:
+            raise HTTPException(
+                status_code=400,
+                detail="Kjo kafshë është adoptuar tashmë",
+            )
+
+        if animal.adoption_status not in [
+            StatusiAdoptimit.disponueshme,
+            StatusiAdoptimit.takim_planifikuar,
+        ]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Kafsha nuk është e disponueshme për adoptim (statusi: {animal.adoption_status})",
+            )
+
+        # Prevent same visitor booking multiple times
+        existing_meeting = db.query(AdoptionMeeting).filter(
+            AdoptionMeeting.animal_id == meeting_data.animal_id,
+            AdoptionMeeting.visitor_email == meeting_data.visitor_email,
+            AdoptionMeeting.status.in_([
+                StatusiTakimit.ne_pritje,
+                StatusiTakimit.konfirmuar,
+            ])
+        ).first()
+
+        if existing_meeting:
+            raise HTTPException(
+                status_code=400,
+                detail="Ju tashmë keni një takim aktiv për këtë kafshë.",
+            )
+
+        # Count active meetings safely inside locked transaction
+        active_meetings_count = db.query(func.count(AdoptionMeeting.meeting_id)).filter(
+            AdoptionMeeting.animal_id == meeting_data.animal_id,
+            AdoptionMeeting.status.in_([
+                StatusiTakimit.ne_pritje,
+                StatusiTakimit.konfirmuar,
+            ]),
+        ).scalar()
+
+        if active_meetings_count >= MAX_MEETINGS_PER_ANIMAL:
+            raise HTTPException(
+                status_code=400,
+                detail="Kjo kafshë ka arritur numrin maksimal të takimeve të planifikuara.",
+            )
+
+        # 🆕 Create new meeting
+        new_meeting = AdoptionMeeting(
+            visitor_name=meeting_data.visitor_name,
+            visitor_phone=meeting_data.visitor_phone,
+            visitor_email=meeting_data.visitor_email,
+            preferred_date=meeting_data.preferred_date,
+            preferred_time=meeting_data.preferred_time,
+            notes=meeting_data.notes,
+            status=StatusiTakimit.ne_pritje,
+            animal_id=meeting_data.animal_id,
         )
 
-    # Block double-booking: reject if there's already an active meeting
-    existing_meeting = db.query(AdoptionMeeting).filter(
-        AdoptionMeeting.animal_id == meeting_data.animal_id,
-        AdoptionMeeting.status.in_([
-            StatusiTakimit.ne_pritje,
-            StatusiTakimit.konfirmuar,
-        ]),
-    ).first()
-    if existing_meeting:
-        raise HTTPException(
-            status_code=400,
-            detail="Kjo kafshë ka tashmë një takim të planifikuar",
-        )
+        db.add(new_meeting)
 
-    new_meeting = AdoptionMeeting(
-        visitor_name   = meeting_data.visitor_name,
-        visitor_phone  = meeting_data.visitor_phone,
-        visitor_email  = meeting_data.visitor_email,
-        preferred_date = meeting_data.preferred_date,
-        preferred_time = meeting_data.preferred_time,
-        notes          = meeting_data.notes,
-        status         = StatusiTakimit.ne_pritje,
-        animal_id      = meeting_data.animal_id,
-        # created_at set automatically by model default
-    )
+        # 🧠 Update animal status only if needed
+        if animal.adoption_status == StatusiAdoptimit.disponueshme:
+            animal.adoption_status = StatusiAdoptimit.takim_planifikuar
 
-    # Mark animal as having a scheduled meeting
-    animal.adoption_status = StatusiAdoptimit.takim_planifikuar
+        db.commit()
+        db.refresh(new_meeting)
 
-    db.add(new_meeting)
-    db.commit()
-    db.refresh(new_meeting)
-    return new_meeting
+        return new_meeting
 
-@router.get("/{meeting_id}", response_model=AdoptionMeetingResponse)
-def get_meeting(
-    meeting_id: int,
-    db: Session = Depends(get_db),
-):
-    """
-    Kthen detajet e një takimi me ID.
-    Qytetarët mund ta përdorin për të kontrolluar statusin e rezervimit.
-    """
-    meeting = db.query(AdoptionMeeting).filter(
-        AdoptionMeeting.meeting_id == meeting_id
-    ).first()
-    if not meeting:
-        raise HTTPException(status_code=404, detail="Takimi nuk u gjet")
-    return meeting
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Gabim i brendshëm i serverit")

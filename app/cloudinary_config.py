@@ -12,7 +12,6 @@ cloudinary.config(
     secure=True,
 )
 
-
 def upload_image(file_bytes: bytes, folder: str = "general") -> str:
     result = cloudinary.uploader.upload(
         file_bytes,

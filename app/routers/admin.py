@@ -35,7 +35,8 @@ router = APIRouter(
 )
 
 
-# PHOTO MANAGEMENT
+# ─── PHOTO MANAGEMENT ─────────────────────────────────────────────────────────
+
 @router.post("/animals/{animal_id}/photos", response_model=AnimalPhotoResponse)
 async def upload_animal_photos(
     animal_id: int,
@@ -51,14 +52,12 @@ async def upload_animal_photos(
     if not animal:
         raise HTTPException(status_code=404, detail="Kafsha nuk u gjet")
 
-    # Validate file type
     if file.content_type not in ["image/jpeg", "image/png", "image/webp"]:
         raise HTTPException(
             status_code=400,
             detail="Vetëm skedarët JPEG, PNG dhe WebP pranohen",
         )
 
-    # Upload to Cloudinary
     file_bytes = await file.read()
     try:
         photo_url = upload_image(file_bytes, folder="animals")
@@ -74,7 +73,7 @@ async def upload_animal_photos(
 
     new_photo = AnimalPhoto(
         photo_url=photo_url,
-        is_primary=existing_photos_count == 0,  # first photo = primary
+        is_primary=existing_photos_count == 0,
         animal_id=animal_id,
     )
 
@@ -112,7 +111,7 @@ def delete_animal_photo(
     return {"message": "Fotoja u fshi me sukses"}
 
 
-# REPORT MANAGEMENT
+# ─── REPORT MANAGEMENT ────────────────────────────────────────────────────────
 
 @router.get("/reports", response_model=List[ReportResponse])
 def get_all_reports(
@@ -157,13 +156,25 @@ def update_report_status(
     if "Zgjidhur" in status_update.report_status.value:
         report.resolved_at = datetime.now()
 
+    # If returned to owner or not found → hide linked animals from adoption
+    HIDE_FROM_ADOPTION = ['Zgjidhur - Kthyer pronarit', 'Zgjidhur - Nuk u gjet']
+    if status_update.report_status.value in HIDE_FROM_ADOPTION:
+        linked_animals = db.query(Animal).filter(Animal.report_id == report_id).all()
+        for animal in linked_animals:
+            if animal.adoption_status != StatusiAdoptimit.adoptuar:
+                animal.adoption_status = StatusiAdoptimit.jo_disponueshme
+
+    # If returned to owner or not found → hide linked animals from adoption
+    HIDE_FROM_ADOPTION = ['Zgjidhur - Kthyer pronarit', 'Zgjidhur - Nuk u gjet']
+    if status_update.report_status.value in HIDE_FROM_ADOPTION:
+        linked_animals = db.query(Animal).filter(Animal.report_id == report_id).all()
+        for animal in linked_animals:
+            if animal.adoption_status != StatusiAdoptimit.adoptuar:
+                animal.adoption_status = StatusiAdoptimit.jo_disponueshme
+        report.resolved_at = datetime.now()
+
     if status_update.report_status == StatusiRaportit.zgjidhur_gjetur:
 
-        if not status_update.animal_name:
-            raise HTTPException(
-                status_code=400,
-                detail="Emri i kafshës është i detyrueshëm kur statusi është 'Zgjidhur - Kafshë e gjetur'",
-            )
         if not status_update.animal_species:
             raise HTTPException(
                 status_code=400,
@@ -187,26 +198,32 @@ def update_report_status(
         health = status_update.animal_health_status
         initial_adoption_status = HEALTH_NE_ADOPTIM.get(health)
 
-        new_animal = Animal(
-            name            = status_update.animal_name,
-            species         = status_update.animal_species,
-            breed           = status_update.animal_breed or "E panjohur",
-            age_estimate    = status_update.animal_age_estimate or "E panjohur",
-            gender          = status_update.animal_gender or GjiniaKafshes.e_panjohur,
-            description     = f"Shpëtuar nga raporti #{report_id}: {report.report_description[:150]}",
-            health_status   = health,
-            adoption_status = initial_adoption_status,
-            adopted_at      = None,
-            report_id       = report_id,
-        )
-        db.add(new_animal)
+        # ── Create multiple animals if count > 1 ──────────────────────────
+        count = status_update.animal_count or 1
+
+        for i in range(count):
+            suffix = f" {i + 1}" if count > 1 else ""
+
+            new_animal = Animal(
+                name            = f"E panjohur{suffix}",
+                species         = status_update.animal_species,
+                breed           = status_update.animal_breed or "E panjohur",
+                age_estimate    = status_update.animal_age_estimate or "E panjohur",
+                gender          = status_update.animal_gender or GjiniaKafshes.e_panjohur,
+                description     = f"Shpëtuar nga raporti #{report_id}: {report.report_description[:150]}",
+                health_status   = health,
+                adoption_status = initial_adoption_status,
+                adopted_at      = None,
+                report_id       = report_id,
+            )
+            db.add(new_animal)
 
     db.commit()
     db.refresh(report)
     return report
 
 
-# ANIMAL MANAGEMENT
+# ─── ANIMAL MANAGEMENT ────────────────────────────────────────────────────────
 
 @router.get("/animals", response_model=List[AnimalResponse])
 def get_all_animals(
@@ -278,7 +295,7 @@ def update_animal(
     return animal
 
 
-# MEETING MANAGEMENT
+# ─── MEETING MANAGEMENT ───────────────────────────────────────────────────────
 
 @router.get("/meetings", response_model=List[AdoptionMeetingResponse])
 def get_all_meetings(

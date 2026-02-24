@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
+from typing import List, Optional
 
-from app.models import Report, Department, Media
-from app.schemas import ReportCreate, ReportResponse, ReportWithDetails,MediaResponse, MediaCreate
-from app.enums import StatusiRaportit, ROUTING_DEPARTAMENTIT
+from app.models import Report, Media
+from app.schemas import ReportCreate, ReportResponse, ReportWithDetails, MediaResponse
+from app.enums import StatusiRaportit, LlojiMedias, ROUTING_DEPARTAMENTIT
 from app.database import get_db
+from app.cloudinary_config import upload_image
 
 router = APIRouter(
     prefix="/reports",
@@ -12,49 +14,14 @@ router = APIRouter(
 )
 
 
-def route_to_department(report_type: str, db: Session) -> int:
-    """
-    Automatically finds the correct department for a given report type.
-
-    Uses ROUTING_DEPARTAMENTIT to map report_type → department_type,
-    then queries the Department table for a matching record.
-
-    Raises HTTP 500 if the municipality hasn't configured that department yet —
-    this is a configuration error, not a user error.
-    """
-    department_type = ROUTING_DEPARTAMENTIT.get(report_type)
-    if not department_type:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Nuk u gjet routing për llojin e raportit: {report_type}",
-        )
-
-    department = db.query(Department).filter(
-        Department.department_type == department_type
-    ).first()
-    if not department:
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                f"Departamenti '{department_type}' nuk është konfiguruar në sistem. "
-                "Kontaktoni administratorin."
-            ),
-        )
-
-    return department.department_id
-
-
 @router.post("/", response_model=ReportResponse, status_code=201)
-def create_report(
-    report_data: ReportCreate,
-    db: Session = Depends(get_db),
-):
-    """
-    Krijon një raport të ri nga qytetari.
-
-    Departamenti caktohet automatikisht — qytetari nuk e zgjedh.
-    """
-    department_id = route_to_department(report_data.report_type, db)
+def create_report(report_data: ReportCreate, db: Session = Depends(get_db)):
+    department_id = ROUTING_DEPARTAMENTIT.get(report_data.report_type)
+    if not department_id:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Lloji i raportit '{report_data.report_type}' nuk u gjet"
+        )
 
     new_report = Report(
         report_type        = report_data.report_type,
@@ -64,9 +31,8 @@ def create_report(
         longitude          = report_data.longitude,
         phoneNr            = report_data.phoneNr,
         email              = report_data.email,
-        department_id      = department_id,
         report_status      = StatusiRaportit.hapur,
-        # created_at is set automatically by the model default
+        department_id      = department_id,
     )
 
     db.add(new_report)
@@ -76,34 +42,67 @@ def create_report(
 
 
 @router.get("/{report_id}", response_model=ReportWithDetails)
-def get_report(
-    report_id: int,
-    db: Session = Depends(get_db),
-):
-    """
-    Kthen detajet e plotë të një raporti me ID.
-    Qytetarët e përdorin për të ndjekur statusin e raportit të tyre.
-    """
+def get_report(report_id: int, db: Session = Depends(get_db)):
     report = db.query(Report).filter(Report.report_id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Raporti nuk u gjet")
     return report
 
-@router.post("/{report_id}/media", response_model = MediaResponse)
-def upload_report_photo(
-    report_id: int,
-    media_data: MediaCreate,
-    db: Session = Depends(get_db)
-):
-    report = db.query(Report).filter(Report.report_id==report_id).first()
 
+# ─── MEDIA UPLOAD ─────────────────────────────────────────────────────────────
+
+@router.post("/{report_id}/media", response_model=MediaResponse, status_code=201)
+async def upload_report_media(
+    report_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Citizen uploads a photo or video as evidence for their report.
+    Accepts: JPEG, PNG, WebP (images) and MP4, MOV (videos).
+    Files are uploaded to Cloudinary and saved in the Media table.
+    """
+    report = db.query(Report).filter(Report.report_id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Raporti nuk u gjet")
-    
+
+    ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
+    ALLOWED_VIDEO_TYPES = {"video/mp4", "video/quicktime"}
+    ALL_ALLOWED = ALLOWED_IMAGE_TYPES | ALLOWED_VIDEO_TYPES
+
+    if file.content_type not in ALL_ALLOWED:
+        raise HTTPException(
+            status_code=400,
+            detail="Vetëm skedarët JPEG, PNG, WebP, MP4 dhe MOV pranohen",
+        )
+
+    is_video = file.content_type in ALLOWED_VIDEO_TYPES
+    media_type = LlojiMedias.video if is_video else LlojiMedias.foto
+
+    file_bytes = await file.read()
+
+    # Limit file size: 10MB for images, 50MB for videos
+    max_size = 50 * 1024 * 1024 if is_video else 10 * 1024 * 1024
+    if len(file_bytes) > max_size:
+        limit_label = "50MB" if is_video else "10MB"
+        raise HTTPException(
+            status_code=400,
+            detail=f"Skedari është shumë i madh. Maksimumi është {limit_label}.",
+        )
+
+    try:
+        resource_type = "video" if is_video else "image"
+        file_url = upload_image(file_bytes, folder="reports", resource_type=resource_type)
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Ngarkimi i skedarit dështoi. Provoni përsëri.",
+        )
+
     new_media = Media(
-        media_type = media_data.media_type,
-        file_url = media_data.file_url,
-        report_id=report_id
+        media_type = media_type,
+        file_url   = file_url,
+        report_id  = report_id,
     )
 
     db.add(new_media)
