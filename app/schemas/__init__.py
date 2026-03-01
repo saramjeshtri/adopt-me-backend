@@ -1,20 +1,24 @@
 from app.schemas.schemas import (
     DepartmentCreate, DepartmentResponse,
     ReportCreate, ReportResponse,
-    ReportStatusUpdate,  # ← Add this line
+    ReportStatusUpdate,
     MediaCreate, MediaResponse,
     AnimalCreate, AnimalResponse, AnimalWithPhotos,
     AnimalPhotoCreate, AnimalPhotoResponse,
     AdoptionMeetingCreate, AdoptionMeetingResponse,
     ReportWithDetails,
     MeetingStatusUpdate,
-    AdoptionStats,AnimalUpdate
+    AdoptionStats,
+    AnimalUpdate,
+    EventCreate, EventUpdate, EventResponse,
+    SurrenderCreate, SurrenderResponse, SurrenderWithMedia,
+    SurrenderMediaResponse, SurrenderStatusUpdate, SurrenderAccept,
 )
 
 __all__ = [
     "DepartmentCreate", "DepartmentResponse",
     "ReportCreate", "ReportResponse",
-    "ReportStatusUpdate",  # ← Add this line
+    "ReportStatusUpdate",
     "MediaCreate", "MediaResponse",
     "AnimalCreate", "AnimalResponse", "AnimalWithPhotos",
     "AnimalPhotoCreate", "AnimalPhotoResponse",
@@ -22,5 +26,8 @@ __all__ = [
     "ReportWithDetails",
     "MeetingStatusUpdate",
     "AdoptionStats",
-    "AnimalUpdate"
+    "AnimalUpdate",
+    "EventCreate", "EventUpdate", "EventResponse",
+    "SurrenderCreate", "SurrenderResponse", "SurrenderWithMedia",
+    "SurrenderMediaResponse", "SurrenderStatusUpdate", "SurrenderAccept",
 ]
