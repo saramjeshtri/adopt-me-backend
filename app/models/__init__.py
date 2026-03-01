@@ -4,7 +4,10 @@ from app.models.models import (
     Media,
     Animal,
     AnimalPhoto,
-    AdoptionMeeting
+    AdoptionMeeting,
+    Event,
+    AnimalSurrender,
+    AnimalSurrenderMedia,
 )
 
 __all__ = [
@@ -13,5 +16,8 @@ __all__ = [
     "Media",
     "Animal",
     "AnimalPhoto",
-    "AdoptionMeeting"
+    "AdoptionMeeting",
+    "Event",
+    "AnimalSurrender",
+    "AnimalSurrenderMedia",
 ]
