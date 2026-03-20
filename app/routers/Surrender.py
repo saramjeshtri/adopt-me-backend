@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List, Optional
+import os
+import resend
 
 from app.database import get_db
 from app.models import AnimalSurrender, AnimalSurrenderMedia, Animal, AnimalPhoto
@@ -11,7 +13,8 @@ from app.schemas import (
 from app.cloudinary_config import upload_image
 from app.enums import StatusiAdoptimit, HEALTH_NE_ADOPTIM, StatusiShendetit, GjiniaKafshes
 from app.auth import verify_admin
-from app.email_service import send_surrender_rejection_email
+
+resend.api_key = os.getenv("RESEND_API_KEY", "")
 
 # ─── Public router ────────────────────────────────────────────────────────────
 public_router = APIRouter(prefix="/surrender", tags=["Animal Surrender"])
@@ -121,10 +124,6 @@ def accept_surrender(
     data: SurrenderAccept,
     db: Session = Depends(get_db),
 ):
-    """
-    Accept a surrender request and automatically create an Animal
-    in the adoption list. Admin provides health status, gender, description.
-    """
     s = db.query(AnimalSurrender).filter(AnimalSurrender.surrender_id == surrender_id).first()
     if not s:
         raise HTTPException(status_code=404, detail="Surrender request not found")
@@ -132,7 +131,6 @@ def accept_surrender(
     if s.status == 'Accepted':
         raise HTTPException(status_code=400, detail="This surrender has already been accepted.")
 
-    # Check if animal already created for this surrender
     existing = db.query(Animal).filter(Animal.surrender_id == surrender_id).first()
     if existing:
         raise HTTPException(
@@ -141,7 +139,6 @@ def accept_surrender(
         )
 
     health = data.health_status or StatusiShendetit.shendetshem
-    # Animals start as Draft — admin must complete profile before publishing
 
     new_animal = Animal(
         name            = data.name or "E panjohur",
@@ -156,9 +153,8 @@ def accept_surrender(
         surrender_id    = surrender_id,
     )
     db.add(new_animal)
-    db.flush()  # get new_animal.animal_id before commit
+    db.flush()
 
-    # Copy surrender photos to the new animal (max 5, first one is primary)
     surrender_photos = db.query(AnimalSurrenderMedia).filter(
         AnimalSurrenderMedia.surrender_id == surrender_id
     ).all()
@@ -184,7 +180,7 @@ def reject_surrender(
     db: Session = Depends(get_db),
 ):
     """
-    Reject a surrender request and optionally send an email to the owner.
+    Reject a surrender request and send email to owner with the reason.
     Expects: { "reason": "..." }
     """
     s = db.query(AnimalSurrender).filter(AnimalSurrender.surrender_id == surrender_id).first()
@@ -194,20 +190,69 @@ def reject_surrender(
     if s.status in ['Accepted', 'Rejected']:
         raise HTTPException(status_code=400, detail=f"Cannot reject a request with status '{s.status}'.")
 
-    reason = data.get("reason", "Nuk u dha arsye specifike.")
+    reason = data.get("reason", "").strip()
 
     s.status = "Rejected"
     db.commit()
     db.refresh(s)
 
-    # Send email if owner provided one
-    if s.email:
-        send_surrender_rejection_email(
-            to_email   = s.email,
-            owner_name = s.owner_name,
-            species    = s.species,
-            reason     = reason,
-        )
+    # ── Send rejection email ──────────────────────────────────────────────────
+    if s.email and resend.api_key:
+        reason_html = (
+            f"<p>Arsyeja e refuzimit:</p>"
+            f"<blockquote style='border-left:3px solid #e02424;padding-left:12px;color:#374151;margin:12px 0'>"
+            f"{reason}"
+            f"</blockquote>"
+        ) if reason else "<p>Stafi ynë do t'ju kontaktojë për më shumë informacion.</p>"
+
+        species_label = s.species or "kafsha"
+
+        try:
+            resend.Emails.send({
+                "from": "onboarding@resend.dev",
+                "to": [s.email],
+                "subject": "Përditësim mbi kërkesën tuaj për dhurim — Bashkia e Tiranës",
+                "html": f"""
+                <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;background:#ffffff">
+
+                  <div style="text-align:center;margin-bottom:28px">
+                    <div style="display:inline-block;background:#fef2f2;border-radius:12px;padding:12px 16px">
+                      <span style="font-size:28px">🐾</span>
+                    </div>
+                    <h1 style="font-size:20px;font-weight:900;color:#111827;margin:12px 0 4px">Më Adopto</h1>
+                    <p style="font-size:11px;color:#9ca3af;margin:0;text-transform:uppercase;letter-spacing:1px">Bashkia e Tiranës</p>
+                  </div>
+
+                  <hr style="border:none;border-top:1px solid #f3f4f6;margin:0 0 24px">
+
+                  <p style="color:#374151;font-size:15px;margin:0 0 8px">Përshëndetje <strong>{s.owner_name}</strong>,</p>
+
+                  <p style="color:#6b7280;font-size:14px;line-height:1.6;margin:0 0 20px">
+                    Faleminderit që na kontaktuat në lidhje me dhurimin e {species_label}-s tuaj.
+                    Pas shqyrtimit të kërkesës, stafi ynë nuk mund ta pranojë këtë rast për momentin.
+                  </p>
+
+                  {reason_html}
+
+                  <p style="color:#6b7280;font-size:14px;line-height:1.6;margin:20px 0 0">
+                    Nëse keni pyetje ose dëshironi të diskutoni alternativa,
+                    mos hezitoni të na kontaktoni në
+                    <a href="mailto:info@tirana.al" style="color:#e02424">info@tirana.al</a>
+                    ose në numrin <strong>0800 0888</strong>.
+                  </p>
+
+                  <div style="margin-top:32px;padding-top:20px;border-top:1px solid #f3f4f6;text-align:center">
+                    <p style="font-size:11px;color:#d1d5db;margin:0">
+                      © 2026 Bashkia e Tiranës · Sektori i Mbrojtjes së Kafshëve
+                    </p>
+                  </div>
+
+                </div>
+                """,
+            })
+        except Exception:
+            # Don't fail the rejection if email sending fails
+            pass
 
     return s
 

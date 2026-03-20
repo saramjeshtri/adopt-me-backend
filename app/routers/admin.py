@@ -130,7 +130,7 @@ def get_all_reports(
         query = query.filter(Report.department_id == department_id)
     if report_type:
         query = query.filter(Report.report_type == report_type)
-    return query.all()
+    return query.order_by(Report.report_id.desc()).all()
 
 
 @router.get("/reports/{report_id}", response_model=ReportWithDetails)
@@ -236,7 +236,7 @@ def get_all_animals(
     query = db.query(Animal)
     if adoption_status:
         query = query.filter(Animal.adoption_status == adoption_status)
-    return query.all()
+    return query.order_by(Animal.animal_id.desc()).all()
 
 
 @router.get("/animals/{animal_id}", response_model=AnimalWithPhotos)
@@ -308,7 +308,7 @@ def get_all_meetings(
     query = db.query(AdoptionMeeting)
     if status:
         query = query.filter(AdoptionMeeting.status == status)
-    return query.all()
+    return query.order_by(AdoptionMeeting.meeting_id.desc()).all()
 
 
 @router.patch("/meetings/{meeting_id}", response_model=AdoptionMeetingResponse)
