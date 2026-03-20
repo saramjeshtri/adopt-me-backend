@@ -12,10 +12,10 @@ cloudinary.config(
     secure=True,
 )
 
-def upload_image(file_bytes: bytes, folder: str = "general") -> str:
+def upload_image(file_bytes: bytes, folder: str = "general", resource_type: str = "image") -> str:
     result = cloudinary.uploader.upload(
         file_bytes,
         folder=folder,
-        resource_type="image",
+        resource_type=resource_type,
     )
     return result["secure_url"]

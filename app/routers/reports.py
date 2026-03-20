@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
-from app.models import Report, Media
+from app.models import Report, Media, Department
 from app.schemas import ReportCreate, ReportResponse, ReportWithDetails, MediaResponse
 from app.enums import StatusiRaportit, LlojiMedias, ROUTING_DEPARTAMENTIT
 from app.database import get_db
@@ -16,11 +16,23 @@ router = APIRouter(
 
 @router.post("/", response_model=ReportResponse, status_code=201)
 def create_report(report_data: ReportCreate, db: Session = Depends(get_db)):
-    department_id = ROUTING_DEPARTAMENTIT.get(report_data.report_type)
-    if not department_id:
+    # ROUTING_DEPARTAMENTIT maps report type → department name (string)
+    # We must look up the actual integer department_id from the DB
+    department_name = ROUTING_DEPARTAMENTIT.get(report_data.report_type)
+    if not department_name:
         raise HTTPException(
             status_code=400,
             detail=f"Lloji i raportit '{report_data.report_type}' nuk u gjet"
+        )
+
+    department = db.query(Department).filter(
+        Department.department_name == department_name
+    ).first()
+
+    if not department:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Departamenti '{department_name}' nuk u gjet në bazën e të dhënave"
         )
 
     new_report = Report(
@@ -32,7 +44,7 @@ def create_report(report_data: ReportCreate, db: Session = Depends(get_db)):
         phoneNr            = report_data.phoneNr,
         email              = report_data.email,
         report_status      = StatusiRaportit.hapur,
-        department_id      = department_id,
+        department_id      = department.department_id,
     )
 
     db.add(new_report)
@@ -57,11 +69,6 @@ async def upload_report_media(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
-    """
-    Citizen uploads a photo or video as evidence for their report.
-    Accepts: JPEG, PNG, WebP (images) and MP4, MOV (videos).
-    Files are uploaded to Cloudinary and saved in the Media table.
-    """
     report = db.query(Report).filter(Report.report_id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Raporti nuk u gjet")
@@ -81,7 +88,6 @@ async def upload_report_media(
 
     file_bytes = await file.read()
 
-    # Limit file size: 10MB for images, 50MB for videos
     max_size = 50 * 1024 * 1024 if is_video else 10 * 1024 * 1024
     if len(file_bytes) > max_size:
         limit_label = "50MB" if is_video else "10MB"

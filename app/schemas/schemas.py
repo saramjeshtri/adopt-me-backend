@@ -91,9 +91,16 @@ class AnimalResponse(AnimalBase):
     adoption_status: StatusiAdoptimit
     added_at:        datetime
     adopted_at:      Optional[datetime] = None
-    report_id:       int
+    report_id:       Optional[int] = None  
     class Config:
         from_attributes = True
+
+class AnimalInput(BaseModel):
+    animal_species:       LlojiKafshes
+    animal_gender:        Optional[GjiniaKafshes]    = GjiniaKafshes.e_panjohur
+    animal_health_status: Optional[StatusiShendetit] = StatusiShendetit.shendetshem
+    animal_breed:         Optional[str]              = None
+    animal_age_estimate:  Optional[str]              = None
 
 
 # ANIMAL PHOTO 
@@ -145,6 +152,7 @@ class ReportStatusUpdate(BaseModel):
     animal_gender:        Optional[GjiniaKafshes]    = GjiniaKafshes.e_panjohur
     animal_health_status: Optional[StatusiShendetit] = StatusiShendetit.shendetshem
     animal_count:         Optional[int]              = 1
+    animals:              Optional[List[AnimalInput]] = None
 
 class MeetingStatusUpdate(BaseModel):
     status: StatusiTakimit

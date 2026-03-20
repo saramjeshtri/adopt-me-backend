@@ -71,6 +71,9 @@ async def upload_animal_photos(
         AnimalPhoto.animal_id == animal_id
     ).count()
 
+    if existing_photos_count >= 5:
+        raise HTTPException(status_code=400, detail="Maksimumi është 5 foto për kafshë.")
+
     new_photo = AnimalPhoto(
         photo_url=photo_url,
         is_primary=existing_photos_count == 0,
@@ -196,7 +199,7 @@ def update_report_status(
             )
 
         health = status_update.animal_health_status
-        initial_adoption_status = HEALTH_NE_ADOPTIM.get(health)
+        # Animals start as Draft — admin must complete profile before publishing
 
         # ── Create multiple animals if count > 1 ──────────────────────────
         count = status_update.animal_count or 1
@@ -207,12 +210,12 @@ def update_report_status(
             new_animal = Animal(
                 name            = f"E panjohur{suffix}",
                 species         = status_update.animal_species,
-                breed           = status_update.animal_breed or "E panjohur",
-                age_estimate    = status_update.animal_age_estimate or "E panjohur",
+                breed           = status_update.animal_breed or None,
+                age_estimate    = status_update.animal_age_estimate or None,
                 gender          = status_update.animal_gender or GjiniaKafshes.e_panjohur,
                 description     = f"Shpëtuar nga raporti #{report_id}: {report.report_description[:150]}",
                 health_status   = health,
-                adoption_status = initial_adoption_status,
+                adoption_status = "Draft",
                 adopted_at      = None,
                 report_id       = report_id,
             )

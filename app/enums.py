@@ -33,10 +33,11 @@ class GjiniaKafshes(str, Enum):
 
 # STATUSI I ADOPTIMIT (Adoption Status)
 class StatusiAdoptimit(str, Enum):
-    disponueshme  = "Disponueshme"
+    draft             = "Draft"
+    disponueshme      = "Disponueshme"
     takim_planifikuar = "Takim i planifikuar"
-    adoptuar      = "Adoptuar"
-    jo_disponueshme = "Jo disponueshme"
+    adoptuar          = "Adoptuar"
+    jo_disponueshme   = "Jo disponueshme"
 
 # STATUSI I SHËNDETIT (Health Status)
 class StatusiShendetit(str, Enum):
@@ -56,14 +57,14 @@ class LlojiMedias(str, Enum):
     foto  = "foto"
     video = "video"
 
-# DEPARTMENT ROUTING MAP
+
 ROUTING_DEPARTAMENTIT = {
-    LlojiRaportit.abuzim:       "Shërbimi Veterinar",
-    LlojiRaportit.e_humbur:     "Policia Bashkiake",
-    LlojiRaportit.agresive:     "Policia Bashkiake",
-    LlojiRaportit.e_lenduar:    "Shërbimi Veterinar",
-    LlojiRaportit.braktisje:    "Sektori i Mjedisit",
-    LlojiRaportit.tjetër:       "Shërbimi Veterinar",  
+    LlojiRaportit.abuzim:       "Shërbimi Veterinar Tiranë",
+    LlojiRaportit.e_humbur:     "Policia Bashkiake Tiranë",
+    LlojiRaportit.agresive:     "Policia Bashkiake Tiranë",
+    LlojiRaportit.e_lenduar:    "Shërbimi Veterinar Tiranë",
+    LlojiRaportit.braktisje:    "Sektori i Mjedisit Tiranë",
+    LlojiRaportit.tjetër:       "Shërbimi Veterinar Tiranë",
 }
 
 HEALTH_NE_ADOPTIM = {
