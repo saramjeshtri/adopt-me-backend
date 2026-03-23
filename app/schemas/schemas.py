@@ -198,6 +198,7 @@ class EventBase(BaseModel):
     is_free:          bool = True
     max_participants: Optional[int] = None
     organizer:        Optional[str] = None
+    image_url:        Optional[str] = None 
 
 class EventCreate(EventBase):
     pass
@@ -211,6 +212,7 @@ class EventUpdate(BaseModel):
     is_free:          Optional[bool] = None
     max_participants: Optional[int]  = None
     organizer:        Optional[str]  = None
+    image_url:        Optional[str]  = None 
 
 class EventResponse(EventBase):
     event_id:   int

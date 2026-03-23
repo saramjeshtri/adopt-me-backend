@@ -116,6 +116,7 @@ class Event(Base):
     max_participants = Column(Integer,     nullable=True)
     organizer        = Column(String(100), nullable=True)
     created_at       = Column(DateTime,    default=datetime.now)
+    image_url        = Column(String(500), nullable=True) 
 
 
 class AnimalSurrender(Base):
